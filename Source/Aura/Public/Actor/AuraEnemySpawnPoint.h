@@ -16,7 +16,6 @@ class AURA_API AAuraEnemySpawnPoint : public ATargetPoint
 {
 	GENERATED_BODY()
 public:
-
 	UFUNCTION(BlueprintCallable)
 	void SpawnEnemy();
 

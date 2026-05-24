@@ -66,33 +66,47 @@ void AAuraCharacter::PossessedBy(AController* NewController)
 void AAuraCharacter::LoadProgress()
 {
 	AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this));
-	if (AuraGameMode)
+	if (!AuraGameMode)
 	{
-		ULoadScreenSaveGame* SaveData = AuraGameMode->RetrieveInGameSaveData();
-		if (SaveData == nullptr) return;
+		InitializeDefaultAttributes();
+		AddCharacterAbilities();
+		return;
+	}
 
-		if (SaveData->bFirstTimeLoadIn)
+	ULoadScreenSaveGame* SaveData = AuraGameMode->RetrieveInGameSaveData();
+	if (SaveData == nullptr)
+	{
+		InitializeDefaultAttributes();
+		AddCharacterAbilities();
+		return;
+	}
+
+	if (SaveData->bFirstTimeLoadIn)
+	{
+		InitializeDefaultAttributes();
+		AddCharacterAbilities();
+	}
+	else
+	{
+		if (UAuraAbilitySystemComponent* AuraASC = Cast<UAuraAbilitySystemComponent>(AbilitySystemComponent))
 		{
-			InitializeDefaultAttributes();
-			AddCharacterAbilities();
+			AuraASC->AddCharacterAbilitiesFromSaveData(SaveData);
 		}
-		else
+		
+		if (AAuraPlayerState* AuraPlayerState = Cast<AAuraPlayerState>(GetPlayerState()))
 		{
-			if (UAuraAbilitySystemComponent* AuraASC = Cast<UAuraAbilitySystemComponent>(AbilitySystemComponent))
-			{
-				AuraASC->AddCharacterAbilitiesFromSaveData(SaveData);
-			}
-			
-			if (AAuraPlayerState* AuraPlayerState = Cast<AAuraPlayerState>(GetPlayerState()))
-			{
-				AuraPlayerState->SetLevel(SaveData->PlayerLevel);
-				AuraPlayerState->SetXP(SaveData->XP);
-				AuraPlayerState->SetAttributePoints(SaveData->AttributePoints);
-				AuraPlayerState->SetSpellPoints(SaveData->SpellPoints);
-			}
-			
-			UAuraAbilitySystemLibrary::InitializeDefaultAttributesFromSaveData(this, AbilitySystemComponent, SaveData);
+			AuraPlayerState->SetLevel(SaveData->PlayerLevel);
+			AuraPlayerState->SetXP(SaveData->XP);
+			AuraPlayerState->SetAttributePoints(SaveData->AttributePoints);
+			AuraPlayerState->SetSpellPoints(SaveData->SpellPoints);
 		}
+		
+		UAuraAbilitySystemLibrary::InitializeDefaultAttributesFromSaveData(this, AbilitySystemComponent, SaveData);
+	}
+
+	if (AAuraPlayerController* AuraPlayerController = Cast<AAuraPlayerController>(GetController()))
+	{
+		AuraPlayerController->LoadBuildProgress(SaveData);
 	}
 }
 
@@ -235,6 +249,10 @@ void AAuraCharacter::SaveProgress_Implementation(const FName& CheckpointTag)
 		SaveData->Intelligence = UAuraAttributeSet::GetIntelligenceAttribute().GetNumericValue(GetAttributeSet());
 		SaveData->Resilience = UAuraAttributeSet::GetResilienceAttribute().GetNumericValue(GetAttributeSet());
 		SaveData->Vigor = UAuraAttributeSet::GetVigorAttribute().GetNumericValue(GetAttributeSet());
+		if (AAuraPlayerController* AuraPlayerController = Cast<AAuraPlayerController>(GetController()))
+		{
+			AuraPlayerController->SaveBuildProgress(SaveData);
+		}
 
 		SaveData->bFirstTimeLoadIn = false;
 

@@ -27,6 +27,12 @@ struct FSavedActor
 	UPROPERTY()
 	FTransform Transform = FTransform();
 
+	UPROPERTY()
+	FSoftClassPath ActorClass;
+
+	UPROPERTY()
+	bool bRuntimeActor = false;
+
 	// Serialized variables from the Actor - only those marked with SaveGame specifier
 	UPROPERTY()
 	TArray<uint8> Bytes;
@@ -136,6 +142,9 @@ public:
 
 	UPROPERTY()
 	float Vigor = 0;
+
+	UPROPERTY()
+	int32 BuildWood = 80;
 	
 	/* Abilities */
 

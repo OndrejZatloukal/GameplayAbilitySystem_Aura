@@ -39,6 +39,10 @@
 		{
 			"Name": "ModelViewViewModel",
 			"Enabled": true
+		},
+		{
+			"Name": "RiderLink",
+			"Enabled": false
 		}
 	]
 }

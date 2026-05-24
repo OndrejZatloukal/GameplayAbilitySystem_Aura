@@ -5,6 +5,7 @@
 
 #include "EngineUtils.h"
 #include "Aura/AuraLogChannels.h"
+#include "Actor/AuraBuildPiece.h"
 #include "Game/AuraGameInstance.h"
 #include "Game/LoadScreenSaveGame.h"
 #include "GameFramework/PlayerStart.h"
@@ -106,10 +107,19 @@ void AAuraGameModeBase::SaveWorldState(UWorld* World, const FString& Destination
 			AActor* Actor = *It;
 
 			if (!IsValid(Actor) || !Actor->Implements<USaveInterface>()) continue;
+			if (const AAuraBuildPiece* BuildPiece = Cast<AAuraBuildPiece>(Actor); IsValid(BuildPiece) && BuildPiece->IsPreviewMode())
+			{
+				continue;
+			}
 
 			FSavedActor SavedActor;
 			SavedActor.ActorName = Actor->GetFName();
 			SavedActor.Transform = Actor->GetTransform();
+			SavedActor.ActorClass = Actor->GetClass();
+			if (const AAuraBuildPiece* BuildPiece = Cast<AAuraBuildPiece>(Actor))
+			{
+				SavedActor.bRuntimeActor = BuildPiece->IsRuntimePlaced();
+			}
 
 			FMemoryWriter MemoryWriter(SavedActor.Bytes);
 
@@ -150,30 +160,50 @@ void AAuraGameModeBase::LoadWorldState(UWorld* World) const
 			return;
 		}
 		
+		TMap<FName, AActor*> ExistingSavableActors;
 		for (FActorIterator It(World); It; ++It)
 		{
 			AActor* Actor = *It;
 
 			if (!Actor->Implements<USaveInterface>()) continue;
+			ExistingSavableActors.Add(Actor->GetFName(), Actor);
+		}
 
-			for (FSavedActor SavedActor : SaveGame->GetSavedMapWithMapName(WorldName).SavedActors)
+		for (const FSavedActor& SavedActor : SaveGame->GetSavedMapWithMapName(WorldName).SavedActors)
+		{
+			AActor* Actor = ExistingSavableActors.FindRef(SavedActor.ActorName);
+
+			if (!Actor && SavedActor.bRuntimeActor && SavedActor.ActorClass.IsValid())
 			{
-				if (SavedActor.ActorName == Actor->GetFName())
+				UClass* ActorClass = SavedActor.ActorClass.TryLoadClass<AActor>();
+				if (!ActorClass)
 				{
-					if (ISaveInterface::Execute_ShouldLoadTransform(Actor))
-					{
-						Actor->SetActorTransform(SavedActor.Transform);
-					}
-
-					FMemoryReader MemoryReader(SavedActor.Bytes);
-
-					FObjectAndNameAsStringProxyArchive Archive(MemoryReader, true);
-					Archive.ArIsSaveGame = true;
-					Actor->Serialize(Archive); // converts binary bytes back into variables
-
-					ISaveInterface::Execute_LoadActor(Actor);
+					continue;
 				}
+
+				FActorSpawnParameters SpawnParameters;
+				SpawnParameters.Name = SavedActor.ActorName;
+				SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				Actor = World->SpawnActor<AActor>(ActorClass, SavedActor.Transform, SpawnParameters);
 			}
+
+			if (!Actor || !Actor->Implements<USaveInterface>())
+			{
+				continue;
+			}
+
+			if (ISaveInterface::Execute_ShouldLoadTransform(Actor))
+			{
+				Actor->SetActorTransform(SavedActor.Transform);
+			}
+
+			FMemoryReader MemoryReader(SavedActor.Bytes);
+
+			FObjectAndNameAsStringProxyArchive Archive(MemoryReader, true);
+			Archive.ArIsSaveGame = true;
+			Actor->Serialize(Archive); // converts binary bytes back into variables
+
+			ISaveInterface::Execute_LoadActor(Actor);
 		}
 	}
 }
